@@ -85,8 +85,12 @@ if st.sidebar.button("Predict price", type="primary"):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_one)[0]
 
+    # SHAP values are in log(price) space; convert to dollar impact relative to baseline.
+    baseline_price = np.expm1(explainer.expected_value)
+    dollar_impacts = np.expm1(explainer.expected_value + shap_values) - baseline_price
+
     impact = (
-        pd.DataFrame({"feature": FEATURES, "impact": shap_values})
+        pd.DataFrame({"feature": FEATURES, "impact": dollar_impacts})
         .assign(abs_impact=lambda d: d["impact"].abs())
         .sort_values("abs_impact", ascending=False)
         .head(8)
