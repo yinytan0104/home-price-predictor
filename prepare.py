@@ -85,6 +85,12 @@ def main():
 
     df.drop(columns=["Condition 1", "Condition 2", "Mo Sold"], inplace=True)
 
+    # Save human-readable columns (with neighborhood name) for the comps panel in the app.
+    comps_display = df[["Neighborhood", "Gr Liv Area", "Overall Qual", "Year Built",
+                         "Year Remod/Add", "Bedroom AbvGr", "Full Bath", "Half Bath",
+                         "Recently Remodeled", "Near Nuisance", "SalePrice"]].copy()
+    comps_display.to_csv("models/comps_display.csv", index=False)
+
     # Encode neighborhood as its median sale price — one informative number instead
     # of 27+ sparse one-hot columns. Captures the price tier each area commands.
     neighborhood_median_map = df.groupby("Neighborhood")["SalePrice"].median()
@@ -93,6 +99,9 @@ def main():
 
     # Save the mapping so the app can translate a neighborhood name to a median price.
     neighborhood_median_map.to_json("models/neighborhood_medians.json")
+
+    # Save feature matrix (no target) for nearest-neighbor lookup in the app.
+    df.drop(columns=["SalePrice"]).to_csv("models/comps_features.csv", index=False)
 
     df.to_csv(OUT_PATH, index=False)
     print(f"Saved clean data: {df.shape[0]} rows, {df.shape[1]} columns -> {OUT_PATH}")

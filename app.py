@@ -4,6 +4,8 @@ import pandas as pd
 import streamlit as st
 import joblib
 import shap
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
 
 bundle = joblib.load("models/model.joblib")
 model = bundle["model"]
@@ -15,6 +17,17 @@ with open("models/metrics.json") as f:
 
 with open("models/neighborhood_medians.json") as f:
     neighborhood_medians = json.load(f)
+
+
+@st.cache_resource
+def load_comps():
+    features = pd.read_csv("models/comps_features.csv")
+    display = pd.read_csv("models/comps_display.csv")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(features)
+    nn = NearestNeighbors(n_neighbors=6, metric="euclidean")
+    nn.fit(X_scaled)
+    return nn, scaler, list(features.columns), display
 
 NEIGHBORHOODS = sorted(neighborhood_medians.keys())
 
@@ -98,5 +111,21 @@ if st.sidebar.button("Predict price", type="primary"):
     for _, r in impact.iterrows():
         arrow = "▲ pushes up" if r["impact"] > 0 else "▼ pulls down"
         st.write(f"**{r['feature']}** — {arrow} by ${abs(r['impact']):,.0f}")
+
+    st.subheader("Comparable homes")
+    nn, scaler, feat_cols, comps_display = load_comps()
+    X_comps = X_one.reindex(columns=feat_cols, fill_value=0)
+    X_scaled_input = scaler.transform(X_comps)
+    _, indices = nn.kneighbors(X_scaled_input)
+    comps = comps_display.iloc[indices[0]].copy().reset_index(drop=True)
+    comps["Sale Price"] = comps["SalePrice"].apply(lambda x: f"${x:,.0f}")
+    comps["Remodeled"] = comps["Recently Remodeled"].map({1: "Yes", 0: "No"})
+    comps["Near Road/Rail"] = comps["Near Nuisance"].map({1: "Yes", 0: "No"})
+    comps = comps[["Neighborhood", "Gr Liv Area", "Overall Qual", "Year Built",
+                    "Bedroom AbvGr", "Full Bath", "Remodeled", "Near Road/Rail", "Sale Price"]]
+    comps.columns = ["Neighborhood", "Living Area (SF)", "Quality", "Year Built",
+                     "Beds", "Full Baths", "Remodeled", "Near Road/Rail", "Sale Price"]
+    st.dataframe(comps, use_container_width=True, hide_index=True)
+
 else:
     st.info("Set the home's details in the sidebar, then click **Predict price**.")
