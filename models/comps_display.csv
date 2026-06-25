@@ -1,4 +1,4 @@
-zipcode,lat,long,sqft_living,grade,condition,view,waterfront,yr_built,yr_renovated,bedrooms,bathrooms,recently_renovated,price
+zipcode,lat,long,sqft_living,grade,condition,view,waterfront,yr_built,yr_renovated,bedrooms,bathrooms,recently_renovated,sale_price
 98178,47.5112,-122.257,1180,7,3,0,0,1955,0,3,1.0,0,221900.0
 98125,47.721,-122.319,2570,7,3,0,0,1951,1991,3,2.25,0,538000.0
 98028,47.7379,-122.233,770,6,3,0,0,1933,0,2,1.0,0,180000.0

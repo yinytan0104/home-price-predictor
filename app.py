@@ -145,7 +145,7 @@ if st.sidebar.button("Predict price", type="primary"):
         _, indices = nn.kneighbors(scaler.transform(X_comps))
         comps = comps_display.iloc[indices[0]].copy().reset_index(drop=True)
 
-        comps["Sale Price"] = comps["price"].apply(lambda x: f"${x:,.0f}")
+        comps["Sale Price"] = comps["sale_price"].apply(lambda x: f"${x:,.0f}")
         comps["Renovated"] = comps["yr_renovated"].apply(lambda x: "Yes" if x > 0 else "No")
         comps["Waterfront"] = comps["waterfront"].map({1: "Yes", 0: "No"})
         display_cols = comps[["zipcode", "sqft_living", "grade", "yr_built",

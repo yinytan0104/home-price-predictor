@@ -79,7 +79,7 @@ def main():
         ["zipcode", "lat", "long", "sqft_living", "grade", "condition",
          "view", "waterfront", "yr_built", "yr_renovated",
          "bedrooms", "bathrooms", "recently_renovated", TARGET]
-    ].copy()
+    ].copy().rename(columns={TARGET: "sale_price"})
     comps_display.to_csv("models/comps_display.csv", index=False)
 
     df = df.drop(columns=["zipcode", "yr_built", "yr_renovated"])
