@@ -26,8 +26,8 @@ def evaluate(name, model, X_test, y_test_log):
 
 def main():
     df = pd.read_csv(DATA_PATH)
-    y = np.log1p(df["SalePrice"])
-    X = df.drop(columns=["SalePrice"])
+    y = np.log1p(df["price"])
+    X = df.drop(columns=["price"])
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42

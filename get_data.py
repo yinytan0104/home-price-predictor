@@ -1,19 +1,11 @@
-"""
-get_data.py
-------------
-Downloads the Ames Housing dataset into data/ames.csv so anyone can reproduce
-this project from scratch.
-
-Run it with:   python get_data.py
-"""
-
 import os
-import urllib.request
+import pandas as pd
 
-URL = "https://raw.githubusercontent.com/wblakecannon/ames/master/data/housing.csv"
+URL = "https://data.openml.org/datasets/0004/42092/dataset_42092.pq"
 os.makedirs("data", exist_ok=True)
-OUT = "data/ames.csv"
+OUT = "data/kc_house_data.csv"
 
-print("Downloading Ames Housing dataset...")
-urllib.request.urlretrieve(URL, OUT)
-print(f"Saved to {OUT}")
+print("Downloading King County House Sales dataset (21,613 records)...")
+df = pd.read_parquet(URL)
+df.to_csv(OUT, index=False)
+print(f"Saved {len(df):,} records -> {OUT}")

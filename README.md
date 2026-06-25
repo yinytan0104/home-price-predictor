@@ -1,8 +1,10 @@
-# Home Price Predictor
+# King County Home Price Predictor
 
-A machine learning pipeline that predicts residential sale prices from property features, with an interactive Streamlit app that explains each prediction using SHAP values.
+A machine learning pipeline that predicts residential sale prices across the Seattle metro area, with an interactive Streamlit app that explains each prediction using SHAP values and shows comparable recent sales on a map.
 
-Built on the **Ames Housing dataset** — 2,413 arm's-length market sales filtered from 2,930 records to remove distressed sales, family transfers, and partial transactions that don't reflect true market value.
+Built on **21,591 King County home sales** (May 2014 – May 2015), covering Seattle and surrounding cities across 70 zip codes.
+
+**Live app:** [home-price-predictor-tyy.streamlit.app](https://home-price-predictor-tyy.streamlit.app)
 
 ---
 
@@ -10,33 +12,31 @@ Built on the **Ames Housing dataset** — 2,413 arm's-length market sales filter
 
 | Model | RMSE | R² |
 |---|---|---|
-| Linear Regression | $23,831 | 0.885 |
-| Random Forest | $20,355 | 0.916 |
-| Gradient Boosting | $19,068 | 0.926 |
-| **XGBoost** *(selected)* | **$19,068** | **0.926** |
+| Linear Regression | $174,741 | 0.750 |
+| Random Forest | $123,020 | 0.876 |
+| Gradient Boosting | $105,930 | 0.908 |
+| **XGBoost** | **$106,108** | **0.908** |
 
-Evaluated on a held-out test set (20% of data, 483 homes). 5-fold cross-validation confirms **RMSE ~$19,400**, validating that results are not an artifact of the train/test split.
+Evaluated on a held-out test set (20% of data, 4,319 homes). 5-fold cross-validation confirms results are stable across splits.
 
-RMSE is in original dollars after back-transforming log-scale predictions. The log transform accounts for the right-skewed distribution of sale prices.
-
-Starting from a naive linear baseline (RMSE $29,773, R² 0.875), the final model represents a **36% reduction in prediction error**.
+RMSE is reported in original dollars after back-transforming log-scale predictions. The log transform corrects for the right-skewed distribution of home prices (median $450K, max $4.5M).
 
 ---
 
 ## Features engineered
 
-Beyond the raw property attributes, the pipeline derives:
-
 | Feature | Rationale |
 |---|---|
-| Qual × Area | Quality matters more in larger homes — the interaction captures what neither column captures alone |
-| Total Finished SF | Buyers price on total livable space, not just above-ground area |
-| Total Bathrooms | Full baths + 0.5 × half baths, matching standard appraisal convention |
-| Total Outdoor SF | Any outdoor living space adds value; one combined signal beats five sparse columns |
-| Recently Remodeled | Updated kitchens and baths command a premium; 15-year threshold matches broker practice |
-| Near Nuisance | Proximity to arterial roads, feeder roads, or railroads is a consistent price drag |
-| Peak Season | Spring/early-summer listings attract more competition and close higher |
-| Neighborhood Median Price | Encodes each neighborhood's price tier as one number — more signal than 27 one-hot columns |
+| House Age | Years since construction — older homes trade at a discount |
+| Years Since Renovation | Captures recency of updates relative to house age |
+| Recently Renovated | Flag for homes updated in the last 10 years |
+| Has Basement | Binary; basement homes command a premium in King County |
+| Sqft vs Neighbors | Living area relative to 15 nearest neighbors — over- or under-built for the block |
+| Distance to Seattle | Euclidean distance from lat/long to downtown — continuous location gradient |
+| Top Grade | Flag for King County grade ≥ 10 (Very Good through Mansion) |
+| Grade × Sqft | Interaction term — high-grade finishes scale exponentially in larger homes |
+| Basement Ratio | Fraction of living space that is underground; buyers discount basement vs above-grade |
+| Zip Median Price | Encodes neighborhood price tier as one number across 70 zip codes |
 
 ---
 
@@ -44,10 +44,10 @@ Beyond the raw property attributes, the pipeline derives:
 
 | File | Purpose |
 |---|---|
-| `get_data.py` | Downloads the Ames Housing dataset |
-| `prepare.py` | Cleans data, filters to normal sales, engineers features |
+| `get_data.py` | Downloads 21,613-record King County dataset from OpenML |
+| `prepare.py` | Cleans data, removes outliers, engineers 10 features, saves comps for app |
 | `train.py` | Trains four models, evaluates on held-out test set, runs 5-fold CV, saves best |
-| `app.py` | Streamlit app — enter a home's details, get a price and top SHAP drivers |
+| `app.py` | Streamlit app — price estimate, SHAP breakdown, comparable homes table and map |
 
 ---
 
