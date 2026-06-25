@@ -13,9 +13,10 @@ LOG_TRANSFORM = bundle.get("log_transform", False)
 with open("models/metrics.json") as f:
     metrics = json.load(f)
 
-NEIGHBORHOODS = ["(baseline)"] + [
-    c.replace("Neighborhood_", "") for c in FEATURES if c.startswith("Neighborhood_")
-]
+with open("models/neighborhood_medians.json") as f:
+    neighborhood_medians = json.load(f)
+
+NEIGHBORHOODS = sorted(neighborhood_medians.keys())
 
 st.set_page_config(page_title="Home Price Predictor", page_icon="🏠")
 st.title("🏠 Home Price Predictor")
@@ -70,9 +71,7 @@ def build_row():
     row["Total Outdoor SF"] = outdoor_sf
     row["Near Nuisance"] = int(near_nuisance)
     row["Peak Season"] = int(peak_season)
-    col = f"Neighborhood_{neighborhood}"
-    if col in row:
-        row[col] = 1
+    row["Neighborhood Median Price"] = neighborhood_medians.get(neighborhood, np.median(list(neighborhood_medians.values())))
     return pd.DataFrame([row])[FEATURES]
 
 

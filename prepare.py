@@ -85,7 +85,14 @@ def main():
 
     df.drop(columns=["Condition 1", "Condition 2", "Mo Sold"], inplace=True)
 
-    df = pd.get_dummies(df, columns=CATEGORICAL_FEATURES, drop_first=True)
+    # Encode neighborhood as its median sale price — one informative number instead
+    # of 27+ sparse one-hot columns. Captures the price tier each area commands.
+    neighborhood_median_map = df.groupby("Neighborhood")["SalePrice"].median()
+    df["Neighborhood Median Price"] = df["Neighborhood"].map(neighborhood_median_map)
+    df.drop(columns=["Neighborhood"], inplace=True)
+
+    # Save the mapping so the app can translate a neighborhood name to a median price.
+    neighborhood_median_map.to_json("models/neighborhood_medians.json")
 
     df.to_csv(OUT_PATH, index=False)
     print(f"Saved clean data: {df.shape[0]} rows, {df.shape[1]} columns -> {OUT_PATH}")

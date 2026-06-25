@@ -2,10 +2,11 @@ import json
 import os
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from xgboost import XGBRegressor
 import joblib
 
 DATA_PATH = "data/processed.csv"
@@ -46,6 +47,17 @@ def main():
             min_samples_leaf=10,
             random_state=42,
         ),
+        "XGBoost": XGBRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=10,
+            random_state=42,
+            n_jobs=-1,
+            verbosity=0,
+        ),
     }
 
     results, fitted = {}, {}
@@ -57,13 +69,35 @@ def main():
     best_name = min(results, key=lambda n: results[n]["rmse"])
     print(f"\nBest model: {best_name}")
 
+    # 5-fold cross-validation on the best model for a more robust accuracy estimate.
+    print(f"\n5-fold cross-validation ({best_name}):")
+    cv_scores = cross_val_score(
+        fitted[best_name], X, y, cv=5, scoring="neg_root_mean_squared_error", n_jobs=-1
+    )
+    cv_rmse_log = -cv_scores.mean()
+    # Approximate dollar-space RMSE from log-space score using the mean log price.
+    mean_log_price = y.mean()
+    cv_rmse_dollars = np.expm1(mean_log_price + cv_rmse_log) - np.expm1(mean_log_price)
+    cv_rmse_dollars = abs(cv_rmse_dollars)
+    print(f"  CV RMSE (log): {cv_rmse_log:.4f} ± {-cv_scores.std():.4f}")
+    print(f"  CV RMSE (approx $): ${cv_rmse_dollars:,.0f}")
+
     joblib.dump(
         {"model": fitted[best_name], "features": list(X.columns), "log_transform": True},
         "models/model.joblib",
     )
     with open("models/metrics.json", "w") as f:
-        json.dump({"best_model": best_name, "results": results, "log_transform": True}, f, indent=2)
-    print("Saved models/model.joblib and models/metrics.json")
+        json.dump(
+            {
+                "best_model": best_name,
+                "results": results,
+                "log_transform": True,
+                "cv_rmse_log": cv_rmse_log,
+            },
+            f,
+            indent=2,
+        )
+    print("\nSaved models/model.joblib and models/metrics.json")
 
 
 if __name__ == "__main__":
