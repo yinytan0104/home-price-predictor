@@ -14,8 +14,8 @@ Built on **21,591 King County home sales** (May 2014 – May 2015), covering Sea
 |---|---|---|
 | Linear Regression | $174,741 | 0.750 |
 | Random Forest | $123,020 | 0.876 |
-| Gradient Boosting | $105,930 | 0.908 |
-| **XGBoost** | **$106,108** | **0.908** |
+| **Gradient Boosting** *(selected)* | **$105,930** | **0.908** |
+| XGBoost | $106,108 | 0.908 |
 
 Evaluated on a held-out test set (20% of data, 4,319 homes). 5-fold cross-validation confirms results are stable across splits.
 
