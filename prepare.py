@@ -56,12 +56,9 @@ def main():
     # What fraction of total living space is underground; buyers discount basement space vs above-grade.
     df["basement_ratio"] = df["sqft_basement"] / df["sqft_living"].replace(0, 1)
 
-    # Zip code median price replaces the raw zip code with a single informative number.
-    zip_median = df.groupby("zipcode")[TARGET].median()
-    df["zip_median_price"] = df["zipcode"].map(zip_median)
-    zip_median.to_json("models/zip_medians.json")
-
     # Save per-zip metadata so the app can look up location and neighbor defaults.
+    # zip_median_price is intentionally NOT computed here — it is computed inside
+    # train.py from training rows only to prevent target leakage.
     zip_meta = (
         df.groupby("zipcode")
         .agg(
@@ -82,7 +79,8 @@ def main():
     ].copy().rename(columns={TARGET: "sale_price"})
     comps_display.to_csv("models/comps_display.csv", index=False)
 
-    df = df.drop(columns=["zipcode", "yr_built", "yr_renovated"])
+    # Keep zipcode so train.py can compute zip_median_price from training rows only.
+    df = df.drop(columns=["yr_built", "yr_renovated"])
 
     df.drop(columns=[TARGET]).to_csv("models/comps_features.csv", index=False)
 

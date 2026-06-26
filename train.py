@@ -34,6 +34,24 @@ def main():
     )
     print(f"Train: {len(X_train)} homes | Test: {len(X_test)} homes\n")
 
+    # Compute zip code median from training rows only — using all rows would leak
+    # test-set prices into the feature before the model ever sees them.
+    zip_median = (
+        X_train[["zipcode"]]
+        .assign(price=np.expm1(y_train).values)
+        .groupby("zipcode")["price"]
+        .median()
+    )
+    fallback = zip_median.median()
+    X_train["zip_median_price"] = X_train["zipcode"].map(zip_median)
+    # Test rows in zip codes not seen in training get the global median.
+    X_test["zip_median_price"] = X_test["zipcode"].map(zip_median).fillna(fallback)
+    X_train = X_train.drop(columns=["zipcode"])
+    X_test = X_test.drop(columns=["zipcode"])
+
+    # Save the training-set medians for the app to use at prediction time.
+    zip_median.to_json("models/zip_medians.json")
+
     models = {
         "Linear Regression": LinearRegression(),
         "Random Forest": RandomForestRegressor(
@@ -69,21 +87,21 @@ def main():
     best_name = min(results, key=lambda n: results[n]["rmse"])
     print(f"\nBest model: {best_name}")
 
-    # 5-fold cross-validation on the best model for a more robust accuracy estimate.
+    # 5-fold cross-validation on training data only — keeping test set fully held out.
     print(f"\n5-fold cross-validation ({best_name}):")
     cv_scores = cross_val_score(
-        fitted[best_name], X, y, cv=5, scoring="neg_root_mean_squared_error", n_jobs=-1
+        fitted[best_name], X_train, y_train, cv=5, scoring="neg_root_mean_squared_error", n_jobs=-1
     )
     cv_rmse_log = -cv_scores.mean()
     # Approximate dollar-space RMSE from log-space score using the mean log price.
-    mean_log_price = y.mean()
+    mean_log_price = y_train.mean()
     cv_rmse_dollars = np.expm1(mean_log_price + cv_rmse_log) - np.expm1(mean_log_price)
     cv_rmse_dollars = abs(cv_rmse_dollars)
     print(f"  CV RMSE (log): {cv_rmse_log:.4f} ± {-cv_scores.std():.4f}")
     print(f"  CV RMSE (approx $): ${cv_rmse_dollars:,.0f}")
 
     joblib.dump(
-        {"model": fitted[best_name], "features": list(X.columns), "log_transform": True},
+        {"model": fitted[best_name], "features": list(X_train.columns), "log_transform": True},
         "models/model.joblib",
     )
     with open("models/metrics.json", "w") as f:
