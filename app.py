@@ -1,3 +1,18 @@
+"""
+app.py
+------
+Streamlit web app for predicting home sale prices in King County, Washington.
+
+Given a home's characteristics (zip code, size, grade, condition, etc.), the app:
+  1. Assembles a feature vector matching the exact schema the model was trained on
+  2. Predicts sale price (log-transformed internally; displayed in dollars)
+  3. Explains the top 8 price drivers using SHAP, converted from log-space to dollars
+  4. Finds 5 structurally comparable recent sales using NearestNeighbors
+  5. Plots those comparables on an interactive map
+
+Run: streamlit run app.py
+"""
+
 import json
 import numpy as np
 import pandas as pd
@@ -26,6 +41,19 @@ ZIPCODES = sorted(zip_meta.keys())
 
 @st.cache_resource
 def load_comps():
+    """
+    Build and cache the comparable-homes search index for the lifetime of the server.
+
+    StandardScaler normalizes each feature to zero mean and unit variance before
+    fitting NearestNeighbors — without this, sqft_living (300–8,000) would dominate
+    the Euclidean distance over grade (1–13) and condition (1–5).
+
+    n_neighbors=6 returns one extra result to guard against the subject home itself
+    appearing in the training data and ranking as its own closest match.
+
+    @st.cache_resource means the scaler and index are built once per server restart,
+    not once per user session or page interaction.
+    """
     features = pd.read_csv("models/comps_features.csv")
     display = pd.read_csv("models/comps_display.csv")
     scaler = StandardScaler()
@@ -70,6 +98,20 @@ month_sold = st.sidebar.slider("Month of sale (1–12)", 1, 12, 6)
 
 
 def build_row():
+    """
+    Assemble one feature row from sidebar inputs, replicating every transformation
+    that prepare.py applied to the training data.
+
+    sqft_living15 and sqft_lot15 (the average size of the 15 nearest homes) can't
+    be entered by a user, so we substitute the per-zip median from zip_meta.json.
+    This is the same fallback used in train.py for unseen zip codes: use the best
+    available proxy rather than filling with a global default that ignores location.
+
+    zip_median_price is looked up from zip_medians.json, which was computed from
+    training rows only — the same values the model saw during training.
+
+    Returns a single-row DataFrame with columns ordered to match FEATURES exactly.
+    """
     meta = zip_meta.get(zipcode, {})
     lat = meta.get("lat", SEATTLE_LAT)
     lon = meta.get("lon", SEATTLE_LON)
@@ -126,6 +168,11 @@ if st.sidebar.button("Predict price", type="primary"):
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X_one)[0]
         baseline_price = np.expm1(explainer.expected_value)
+        # SHAP values are in log-space (tiny numbers like +0.03) because the model
+        # predicts log(price). To display dollar impact we shift the baseline by each
+        # SHAP value in log-space then back-transform: expm1(baseline + shap) - expm1(baseline).
+        # This correctly accounts for the non-linear mapping — a +0.03 log shift means
+        # different dollar amounts at $200K vs $800K.
         dollar_impacts = np.expm1(explainer.expected_value + shap_values) - baseline_price
 
         impact = (

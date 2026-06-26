@@ -1,3 +1,27 @@
+"""
+train.py
+--------
+Trains four regression models on the processed King County dataset and saves
+the best-performing one for the Streamlit app to serve.
+
+Design decisions
+----------------
+Log-transform the target: home prices in King County are right-skewed (median
+~$450K, max ~$4.5M). Predicting log(1 + price) compresses the tail, produces
+more symmetric residuals, and prevents the model from over-fitting to a handful
+of high-value sales. All error metrics are back-transformed to dollars so they
+remain interpretable.
+
+Leak-free zip encoding: zip_median_price (the most powerful location feature)
+is computed from training rows only, then mapped onto the test set. Using the
+full dataset before the split would let test-set prices bleed into a feature
+the model sees at evaluation time — inflating apparent R² without reflecting
+real-world performance.
+
+CV on training data only: cross_val_score is called on X_train/y_train so the
+held-out test set remains a clean, untouched estimate of generalization error.
+"""
+
 import json
 import os
 import numpy as np
@@ -14,6 +38,14 @@ os.makedirs("models", exist_ok=True)
 
 
 def evaluate(name, model, X_test, y_test_log):
+    """
+    Compute RMSE, MAE, and R² in original dollar space after back-transforming
+    log-scale predictions.
+
+    np.expm1 is the exact inverse of np.log1p: expm1(x) = e^x - 1, which
+    correctly reverses log1p(x) = log(1 + x). Using np.exp instead would
+    introduce a systematic ~$1 upward bias across all predictions.
+    """
     preds_log = model.predict(X_test)
     preds = np.expm1(preds_log)
     y_test = np.expm1(y_test_log)
@@ -25,7 +57,20 @@ def evaluate(name, model, X_test, y_test_log):
 
 
 def main():
+    """
+    Run the full training pipeline: log-transform target, 80/20 split, compute
+    leak-free zip encoding, benchmark four models, run 5-fold CV on the winner,
+    and save the model bundle.
+
+    Feature list is captured from list(X_train.columns) — not list(X.columns) —
+    because X_train is mutated after the split: zipcode is replaced with
+    zip_median_price. The saved feature order must exactly match the vector
+    that build_row() in app.py assembles at prediction time.
+    """
     df = pd.read_csv(DATA_PATH)
+    # Log-transform corrects for the right-skewed distribution of sale prices.
+    # The model learns to predict log(1 + price); all reported metrics are
+    # converted back to dollars via np.expm1 before printing or saving.
     y = np.log1p(df["price"])
     X = df.drop(columns=["price"])
 
@@ -34,17 +79,19 @@ def main():
     )
     print(f"Train: {len(X_train)} homes | Test: {len(X_test)} homes\n")
 
-    # Compute zip code median from training rows only — using all rows would leak
-    # test-set prices into the feature before the model ever sees them.
+    # Zip-code median price encodes neighborhood tier as one number across 70 zip codes.
+    # Computing it from training rows only is critical: if we used all rows, every test
+    # home's price would have contributed to its own zip median — a form of target leakage
+    # that makes the model look better on paper than it would perform on new data.
     zip_median = (
         X_train[["zipcode"]]
         .assign(price=np.expm1(y_train).values)
         .groupby("zipcode")["price"]
         .median()
     )
+    # Fallback for zip codes that appear only in the test set (not seen during training).
     fallback = zip_median.median()
     X_train["zip_median_price"] = X_train["zipcode"].map(zip_median)
-    # Test rows in zip codes not seen in training get the global median.
     X_test["zip_median_price"] = X_test["zipcode"].map(zip_median).fillna(fallback)
     X_train = X_train.drop(columns=["zipcode"])
     X_test = X_test.drop(columns=["zipcode"])
@@ -58,11 +105,11 @@ def main():
             n_estimators=500, random_state=42, n_jobs=-1
         ),
         "Gradient Boosting": GradientBoostingRegressor(
-            n_estimators=500,
-            learning_rate=0.05,
-            max_depth=4,
-            subsample=0.8,
-            min_samples_leaf=10,
+            n_estimators=500,        # 500 trees; learning_rate=0.05 means each adds a small correction
+            learning_rate=0.05,      # slow learning rate + many trees outperforms fast + few
+            max_depth=4,             # shallow trees prevent individual features from dominating
+            subsample=0.8,           # row subsampling adds variance reduction (stochastic GB)
+            min_samples_leaf=10,     # regularizes leaf nodes to avoid fitting noise in sparse zips
             random_state=42,
         ),
         "XGBoost": XGBRegressor(
@@ -70,8 +117,8 @@ def main():
             learning_rate=0.05,
             max_depth=4,
             subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_weight=10,
+            colsample_bytree=0.8,    # randomly sample 80% of features per tree (column subsampling)
+            min_child_weight=10,     # XGBoost equivalent of min_samples_leaf
             random_state=42,
             n_jobs=-1,
             verbosity=0,
